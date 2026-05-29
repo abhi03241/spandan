@@ -46,6 +46,7 @@ const requestTimeout = (req, res, next) => {
 const app = express()
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
+  path: '/spandan/socket.io',
   cors: {
     origin: (origin, callback) => {
       if (!origin || CORS_ORIGINS.includes(origin) || origin.startsWith('http://localhost')) {

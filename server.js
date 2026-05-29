@@ -36,22 +36,24 @@ function proxyReq(req, res, targetPath, isSocketIO = false) {
   };
 
   if (isSocketIO && req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
-    const proxyReq = http.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-    });
+    const proxyReq = http.request(options);
     proxyReq.on('error', (e) => {
       console.error('WebSocket proxy error:', e.message);
-      res.status(502).json({ error: e.message });
+    });
+    proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+      const clientSocket = req.socket;
+      if (!clientSocket || clientSocket.destroyed) { proxySocket.destroy(); return; }
+      clientSocket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+      proxySocket.pipe(clientSocket);
+      clientSocket.pipe(proxySocket);
+      proxySocket.on('error', (e) => { clientSocket.destroy(); });
+      clientSocket.on('error', (e) => { proxySocket.destroy(); });
+    });
+    proxyReq.on('response', (proxyRes) => {
+      proxyRes.on('data', () => {});
+      proxyRes.on('end', () => {});
     });
     req.pipe(proxyReq);
-    proxyReq.pipe(res);
-    proxyReq.on('upgrade', (proxyReq, proxySocket, proxyHead) => {
-      if (res.headersSent) return;
-      const headers = ['HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade'];
-      res.write(headers.join('\r\n') + '\r\n\r\n');
-      proxySocket.pipe(res);
-      res.pipe(proxySocket);
-    });
   } else {
     const proxyReq = http.request(options, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
@@ -62,17 +64,20 @@ function proxyReq(req, res, targetPath, isSocketIO = false) {
   }
 }
 
-// API proxy: BASE_PATH/api/* → localhost:3001/api/*
+// API proxy: BASE_PATH/api/* -> localhost:3001/api/*
 app.use(BASE_PATH + '/api', (req, res) => {
   const targetPath = '/api' + req.url.replace(BASE_PATH + '/api', '');
   proxyReq(req, res, targetPath);
 });
 
-// Socket.IO proxy: BASE_PATH/socket.io/* → localhost:3001/socket.io/*
+// Socket.IO proxy: BASE_PATH/socket.io/* -> localhost:3001/spandan/socket.io/*
 app.use(BASE_PATH + '/socket.io', (req, res) => {
-  const targetPath = '/socket.io' + req.url.replace(BASE_PATH + '/socket.io', '');
+  const targetPath = '/spandan/socket.io' + req.url.replace(BASE_PATH + '/socket.io', '');
   proxyReq(req, res, targetPath, true);
 });
+
+// Static assets
+app.use(BASE_PATH + '/assets', express.static(DIST_DIR));
 
 // Static files: BASE_PATH/*
 app.use(BASE_PATH, express.static(DIST_DIR));
@@ -85,5 +90,5 @@ app.get(BASE_PATH + '/*', (req, res) => {
 app.get('/', (req, res) => res.redirect(BASE_PATH + '/'));
 
 createServer(app).listen(5002, '127.0.0.1', () => {
-  console.log(`Spandan server running on port 5002 (BASE_PATH=${BASE_PATH})`);
+  console.log('Spandan server running on port 5002 (BASE_PATH=' + BASE_PATH + ')');
 });
