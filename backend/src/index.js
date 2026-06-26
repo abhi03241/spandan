@@ -23,6 +23,7 @@ dotenv.config()
 
 const BASE_PATH = process.env.BASE_PATH || ''
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3001').split(',').map(s => s.trim())
+const SOCKET_PATH = process.env.SOCKET_PATH || (BASE_PATH ? `${BASE_PATH}/socket.io` : '/socket.io')
 
 // Request timeout middleware - defined BEFORE use due to hoisting
 const requestTimeout = (req, res, next) => {
@@ -46,6 +47,7 @@ const requestTimeout = (req, res, next) => {
 const app = express()
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
+  path: SOCKET_PATH,
   cors: {
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Socket.IO polling)
