@@ -8,6 +8,12 @@ import jwt from 'jsonwebtoken'
 import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 
+// Load and validate configuration
+const validation = require('./validation')
+
+// Validate environment before starting
+validation.validateEnvironment()
+
 // Import routes
 import authRoutes from './routes/auth.js'
 import roomRoutes from './routes/rooms.js'
@@ -140,7 +146,7 @@ io.on('connection', (socket) => {
         socket.emit('authenticated', { success: false, error: 'No token provided' })
         return
       }
-      const decoded = jwt.verify(data.token, process.env.JWT_SECRET || 'your-secret-key-change-in-production')
+      const decoded = jwt.verify(data.token, JWT_SECRET)
       connectedUsers.set(socket.id, decoded.userId)
       socket.emit('authenticated', { success: true })
     } catch (error) {
