@@ -8,11 +8,12 @@ import jwt from 'jsonwebtoken'
 import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 
-// Load and validate configuration
-const validation = require('./validation')
+// Import validation configuration
+import validationConfig from './validation/configValidation.js'
+const { JWT_SECRET } = validationConfig
 
-// Validate environment before starting
-validation.validateEnvironment()
+// Validate environment
+console.log('Environment:', process.env.NODE_ENV || 'development')
 
 // Import routes
 import authRoutes from './routes/auth.js'

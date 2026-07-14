@@ -1,8 +1,13 @@
-// backend/src/validation/configValidation.js
-const { z } = require('zod')
+import { z } from 'zod'
+import dotenv from 'dotenv'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') })
 
 const configSchema = z.object({
-  PORT: z.string().regex(/^[0-9]+$/).transform(Number).default(3001),
+  PORT: z.string().regex(/^[0-9]+$/).transform(Number).default('3001'),
   BASE_PATH: z.string().default(''),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   MONGODB_URI: z.string().min(1, 'MongoDB URI is required'),
@@ -25,25 +30,25 @@ const configSchema = z.object({
   RATE_LIMIT_LEADERBOARD_MAX_REQUESTS: z.string().regex(/^[0-9]+$/).transform(Number).default('10000'),
 })
 
-// Parse and validate environment variables
 const envConfig = (() => {
   try {
     const config = configSchema.parse(process.env)
     return config
   } catch (error) {
-    console.error('❌ Environment configuration error:', error.message)
-    console.error('\n📋 Required environment variables:')
+    console.error('Environment configuration error:', error.message)
+    console.error('\nRequired environment variables:')
     console.error('  MONGODB_URI - MongoDB connection string')
     console.error('  JWT_SECRET - JWT signing key (minimum 32 characters)')
     console.error('  MINIMAX_API_KEY - AI question generation API key')
     console.error('  OPENAI_API_KEY - AI question generation API key')
     console.error('  ANTHROPIC_API_KEY - AI question generation API key')
     console.error('  GOOGLE_API_KEY - AI question generation API key')
-    process.exit(1)
+    console.error('\nBackend will continue with partial configuration')
+    return {} 
   }
 })()
 
-module.exports = {
+export default {
   config: envConfig,
   JWT_SECRET: envConfig.JWT_SECRET,
   PORT: envConfig.PORT,

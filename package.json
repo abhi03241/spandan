@@ -19,6 +19,7 @@
     "concurrently": "^8.2.2"
   },
   "dependencies": {
+    "mongodb-memory-server": "^11.2.0",
     "pm2": "^7.0.1"
   }
 }
