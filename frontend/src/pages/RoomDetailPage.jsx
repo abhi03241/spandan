@@ -15,6 +15,9 @@ import Leaderboard from '../components/Leaderboard'
 import { saveTranscript } from '../services/transcriptService'
 import { transcribeAudio, getTranscriptionStatus, convertWebMToWav } from '../services/serverTranscriptionService'
 import { API_URL } from '../config.js'
+import { playStudentSubmittedSound, playSegmentEndSound } from '../services/soundService'
+import { useTeacherShortcuts } from '../hooks/useTeacherShortcuts'
+import QuestionTemplateBrowser from '../components/QuestionTemplateBrowser'
 
 function RoomDetailPage() {
   const { roomId } = useParams()
@@ -97,6 +100,8 @@ function RoomDetailPage() {
   })
   const [totalParticipants, setTotalParticipants] = useState(0)
   const [answerCounts, setAnswerCounts] = useState({}) // questionId -> count
+  const [soundEnabled, setSoundEnabled] = useState(true)
+  const [showTemplateBrowser, setShowTemplateBrowser] = useState(false)
 
   useEffect(() => {
     if (token) {
@@ -145,19 +150,20 @@ function RoomDetailPage() {
     }
   }, [socket])
 
-  // Listen for response:new events to update answer counts
+  // Listen for response:new events to update answer counts and play sound
   useEffect(() => {
     if (!socket) return
     const handleNewResponse = (data) => {
-      console.log('[DEBUG] New response received:', data)
       setAnswerCounts(prev => ({
         ...prev,
-        [data.questionId]: (prev[data.questionId] || 0) + 1
+        [data.questionId]: (prev[data.questionId] || 0) + 1,
+        [`${data.questionId}_${data.selectedOption}`]: (prev[`${data.questionId}_${data.selectedOption}`] || 0) + 1
       }))
+      if (soundEnabled) playStudentSubmittedSound()
     }
     socket.on('response:new', handleNewResponse)
     return () => socket.off('response:new', handleNewResponse)
-  }, [socket])
+  }, [socket, soundEnabled])
 
   // Listen for question launch events to show timer to teacher
   useEffect(() => {
@@ -233,7 +239,31 @@ function RoomDetailPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-
+  // Teacher keyboard shortcuts
+  useTeacherShortcuts({
+    onToggleRecording: toggleRecording,
+    onGenerateQuestions: () => {
+      if (!isEnded && transcript && generateQEnabled) handleManualGenerateQuestions()
+    },
+    onCreateQuestion: () => {
+      if (!isEnded) setShowCreateQuestion(true)
+    },
+    onEndRoom: () => {
+      if (!isEnded && window.confirm('End this room session?')) handleEndRoom()
+    },
+    onToggleSound: () => setSoundEnabled(prev => !prev),
+    onOpenSettings: () => {
+      if (!isEnded) setShowSettings(true)
+    },
+    onPasteGenerate: () => {
+      if (!isEnded) setShowTextToQuestions(true)
+    },
+    onClose: () => {
+      setShowCreateQuestion(false)
+      setShowTextToQuestions(false)
+      setShowSettings(false)
+    }
+  }, !isEnded)
 
   // Check server transcription status on mount
   const checkServerTranscription = async () => {
@@ -1174,6 +1204,28 @@ function RoomDetailPage() {
               </button>
             )}
 
+            {/* Templates Button */}
+            {!isEnded && (
+              <button
+                onClick={() => setShowTemplateBrowser(true)}
+                style={{
+                  padding: '8px 16px',
+                  background: '#8b5cf6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                📚 Templates
+              </button>
+            )}
+
             {/* Settings Dropdown */}
             <div style={{ position: 'relative' }} ref={settingsRef}>
               <button
@@ -1558,7 +1610,7 @@ function RoomDetailPage() {
                         })}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', marginLeft: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', marginLeft: '12px', minWidth: '80px' }}>
                       <span style={{
                         padding: '4px 10px',
                         borderRadius: '6px',
@@ -1569,7 +1621,65 @@ function RoomDetailPage() {
                       }}>
                         {answerCounts[q._id] || 0}/{totalParticipants}
                       </span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>answered</span>
+                      {totalParticipants > 0 && (
+                        <div style={{ width: '100%', display: 'flex', gap: '2px', height: '6px', borderRadius: '3px', overflow: 'hidden', background: 'var(--border-color)' }}>
+                          {(q.options || []).map((opt, oi) => {
+                            const count = answerCounts[`${q._id}_${oi}`] || 0
+                            const total = answerCounts[q._id] || 0
+                            const pct = total > 0 ? (count / total) * 100 : 0
+                            const color = opt.isCorrect ? '#059669' : ['#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'][oi % 4]
+                            return pct > 0 ? <div key={oi} style={{ width: `${pct}%`, background: color, borderRadius: '2px' }} /> : null
+                          })}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
+                        {(q.options || []).map((opt, oi) => {
+                          const count = answerCounts[`${q._id}_${oi}`] || 0
+                          const total = answerCounts[q._id] || 0
+                          const pct = total > 0 ? Math.round((count / total) * 100) : 0
+                          return pct > 0 ? (
+                            <div key={oi} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', fontSize: '10px', color: 'var(--text-secondary)' }}>
+                              <span style={{ fontWeight: opt.isCorrect ? '700' : '400', color: opt.isCorrect ? '#059669' : 'inherit' }}>
+                                {String.fromCharCode(65 + oi)}
+                              </span>
+                              <span style={{ minWidth: '30px', textAlign: 'right' }}>{pct}%</span>
+                            </div>
+                          ) : null
+                        })}
+                      </div>
+                      {!isEnded && (
+                        <button
+                          onClick={() => {
+                            const templateData = {
+                              type: q.type,
+                              question: q.question,
+                              options: q.options,
+                              explanation: q.explanation || '',
+                              timeToAnswer: q.timeToAnswer || roomSettings.timeToAnswer,
+                              points: q.points || roomSettings.points,
+                            }
+                            fetch(`${API_URL}/questions/templates`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                              body: JSON.stringify({ ...templateData, name: q.question.substring(0, 60) })
+                            }).then(r => r.ok ? alert('Saved as template!') : alert('Failed to save template'))
+                            .catch(() => alert('Failed to save template'))
+                          }}
+                          style={{
+                            padding: '2px 8px',
+                            border: '1px dashed var(--border-color)',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            color: 'var(--text-secondary)',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                          title="Save as template"
+                        >
+                          + Template
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1598,6 +1708,19 @@ function RoomDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Template Browser */}
+      <QuestionTemplateBrowser
+        isOpen={showTemplateBrowser}
+        onClose={() => setShowTemplateBrowser(false)}
+        roomId={room?._id}
+        token={token}
+        socket={socket}
+        onQuestionCreated={(question) => {
+          setGeneratedQuestions(prev => [question, ...prev])
+          setShowTemplateBrowser(false)
+        }}
+      />
 
       {/* Question Approval Popup */}
       {showQuestionPopup && pendingQuestions.length > 0 && (

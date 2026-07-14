@@ -446,16 +446,27 @@ router.get('/counts/:roomId', async (req, res) => {
       return new mongoose.Types.ObjectId(id)
     }
 
-    // Get count per question
+    // Get count per question (total)
     const counts = await Response.aggregate([
       { $match: { roomId: toObjectId(roomId) } },
       { $group: { _id: '$questionId', count: { $sum: 1 } } }
     ])
 
+    // Get per-option counts per question
+    const optionCounts = await Response.aggregate([
+      { $match: { roomId: toObjectId(roomId) } },
+      { $group: { _id: { questionId: '$questionId', selectedOption: '$selectedOption' }, count: { $sum: 1 } } }
+    ])
 
     const countMap = {}
     counts.forEach(c => {
       countMap[c._id.toHexString()] = c.count
+    })
+
+    optionCounts.forEach(c => {
+      const qid = c._id.questionId.toHexString()
+      const optIdx = c._id.selectedOption
+      countMap[`${qid}_${optIdx}`] = c.count
     })
 
     res.json({ success: true, counts: countMap })

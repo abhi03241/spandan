@@ -156,4 +156,119 @@ router.get('/', async (req, res) => {
   }
 })
 
+// === Question Templates ===
+// GET /api/questions/templates - List teacher's templates
+router.get('/templates', async (req, res) => {
+  try {
+    const QuestionTemplate = (await import('../models/QuestionTemplate.js')).default
+    const { page = 1, limit = 50 } = req.query
+    const pageNum = Math.max(1, parseInt(page, 10) || 1)
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50))
+    const skip = (pageNum - 1) * limitNum
+
+    const [templates, total] = await Promise.all([
+      QuestionTemplate.find({ teacherId: req.user._id })
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      QuestionTemplate.countDocuments({ teacherId: req.user._id })
+    ])
+
+    res.json({
+      success: true,
+      templates,
+      pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) }
+    })
+  } catch (error) {
+    console.error('Error fetching templates:', error)
+    res.status(500).json({ success: false, error: 'Failed to fetch templates' })
+  }
+})
+
+// POST /api/questions/templates - Save a question as template
+router.post('/templates', authorize('teacher'), async (req, res) => {
+  try {
+    const QuestionTemplate = (await import('../models/QuestionTemplate.js')).default
+    const { name, type, question, options, explanation, timeToAnswer, points, tags } = req.body
+
+    if (!name || !type || !question || !options) {
+      return res.status(400).json({ error: 'Missing required fields: name, type, question, options' })
+    }
+
+    const template = new QuestionTemplate({
+      teacherId: req.user._id,
+      name: name.trim(),
+      type,
+      question,
+      options,
+      explanation: explanation || '',
+      timeToAnswer: timeToAnswer || 30,
+      points: points || 10,
+      tags: tags || []
+    })
+
+    await template.save()
+    res.status(201).json({ success: true, template })
+  } catch (error) {
+    console.error('Error saving template:', error)
+    res.status(500).json({ success: false, error: 'Failed to save template' })
+  }
+})
+
+// POST /api/questions/templates/:id/use - Import template into a room
+router.post('/templates/:id/use', authorize('teacher'), async (req, res) => {
+  try {
+    const QuestionTemplate = (await import('../models/QuestionTemplate.js')).default
+    const Question = (await import('../models/Question.js')).default
+
+    const template = await QuestionTemplate.findOne({ _id: req.params.id, teacherId: req.user._id })
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    const { roomId } = req.body
+    if (!roomId) {
+      return res.status(400).json({ error: 'roomId is required' })
+    }
+
+    const question = new Question({
+      roomId,
+      type: template.type,
+      question: template.question,
+      options: template.options,
+      explanation: template.explanation,
+      timeToAnswer: template.timeToAnswer,
+      points: template.points,
+      status: 'approved',
+      createdBy: req.user._id
+    })
+
+    await question.save()
+    await QuestionTemplate.updateOne({ _id: template._id }, { $inc: { usageCount: 1 } })
+
+    res.status(201).json({ success: true, question })
+  } catch (error) {
+    console.error('Error using template:', error)
+    res.status(500).json({ success: false, error: 'Failed to use template' })
+  }
+})
+
+// DELETE /api/questions/templates/:id - Delete a template
+router.delete('/templates/:id', authorize('teacher'), async (req, res) => {
+  try {
+    const QuestionTemplate = (await import('../models/QuestionTemplate.js')).default
+    const result = await QuestionTemplate.deleteOne({ _id: req.params.id, teacherId: req.user._id })
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    res.json({ success: true, message: 'Template deleted' })
+  } catch (error) {
+    console.error('Error deleting template:', error)
+    res.status(500).json({ success: false, error: 'Failed to delete template' })
+  }
+})
+
 export default router

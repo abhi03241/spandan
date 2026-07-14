@@ -130,6 +130,57 @@ export const playTimerWarningSound = async () => {
   }
 }
 
+export const playStudentSubmittedSound = async () => {
+  if (!audioContext) {
+    await initAudioContext()
+  }
+  if (!audioContext) return
+
+  try {
+    const now = audioContext.currentTime
+    const notes = [659.25, 783.99, 659.25]
+    notes.forEach((freq, i) => {
+      const osc = audioContext.createOscillator()
+      const gain = audioContext.createGain()
+      osc.type = 'sine'
+      osc.connect(gain)
+      gain.connect(audioContext.destination)
+      osc.frequency.setValueAtTime(freq, now + i * 0.08)
+      gain.gain.setValueAtTime(0.12, now + i * 0.08)
+      gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.12)
+      osc.start(now + i * 0.08)
+      osc.stop(now + i * 0.08 + 0.12)
+    })
+  } catch (error) {
+    console.warn('[SoundService] Failed to play student submitted sound:', error)
+  }
+}
+
+export const playSegmentEndSound = async () => {
+  if (!audioContext) {
+    await initAudioContext()
+  }
+  if (!audioContext) return
+
+  try {
+    const now = audioContext.currentTime
+    const osc = audioContext.createOscillator()
+    const gain = audioContext.createGain()
+    osc.type = 'triangle'
+    osc.connect(gain)
+    gain.connect(audioContext.destination)
+    osc.frequency.setValueAtTime(440, now)
+    osc.frequency.setValueAtTime(587.33, now + 0.15)
+    osc.frequency.setValueAtTime(783.99, now + 0.3)
+    gain.gain.setValueAtTime(0.2, now)
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5)
+    osc.start(now)
+    osc.stop(now + 0.5)
+  } catch (error) {
+    console.warn('[SoundService] Failed to play segment end sound:', error)
+  }
+}
+
 export const getAudioContextStatus = () => audioContext?.state || 'not-initialized'
 
 export default { 
@@ -137,6 +188,8 @@ export default {
   playSubmitSound, 
   playCorrectSound, 
   playTimerWarningSound,
+  playStudentSubmittedSound,
+  playSegmentEndSound,
   initAudioContext,
   resumeAudioContext,
   getAudioContextStatus
