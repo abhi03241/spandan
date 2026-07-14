@@ -239,32 +239,6 @@ function RoomDetailPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Teacher keyboard shortcuts
-  useTeacherShortcuts({
-    onToggleRecording: toggleRecording,
-    onGenerateQuestions: () => {
-      if (!isEnded && transcript && generateQEnabled) handleManualGenerateQuestions()
-    },
-    onCreateQuestion: () => {
-      if (!isEnded) setShowCreateQuestion(true)
-    },
-    onEndRoom: () => {
-      if (!isEnded && window.confirm('End this room session?')) handleEndRoom()
-    },
-    onToggleSound: () => setSoundEnabled(prev => !prev),
-    onOpenSettings: () => {
-      if (!isEnded) setShowSettings(true)
-    },
-    onPasteGenerate: () => {
-      if (!isEnded) setShowTextToQuestions(true)
-    },
-    onClose: () => {
-      setShowCreateQuestion(false)
-      setShowTextToQuestions(false)
-      setShowSettings(false)
-    }
-  }, !isEnded)
-
   // Check server transcription status on mount
   const checkServerTranscription = async () => {
     try {
@@ -973,6 +947,32 @@ function RoomDetailPage() {
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
+
+  // Teacher keyboard shortcuts (placed here so all functions are hoisted)
+  useTeacherShortcuts({
+    onToggleRecording: () => toggleRecording(),
+    onGenerateQuestions: () => {
+      if (!isEnded && transcript && generateQEnabled) handleManualGenerateQuestions()
+    },
+    onCreateQuestion: () => {
+      if (!isEnded) setShowCreateQuestion(true)
+    },
+    onEndRoom: () => {
+      if (!isEnded && window.confirm('End this room session?')) handleEndRoom()
+    },
+    onToggleSound: () => setSoundEnabled(prev => !prev),
+    onOpenSettings: () => {
+      if (!isEnded) setShowSettings(true)
+    },
+    onPasteGenerate: () => {
+      if (!isEnded) setShowTextToQuestions(true)
+    },
+    onClose: () => {
+      setShowCreateQuestion(false)
+      setShowTextToQuestions(false)
+      setShowSettings(false)
+    }
+  }, !isEnded)
 
   if (isLoading) {
     return (
